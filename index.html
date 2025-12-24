@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Yapper Pro</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0084ff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="logo.png">
+
+    <style>
+        :root {
+            --bg-body: #f0f2f5; --bg-card: #ffffff; --text-main: #1c1e21;
+            --text-sub: #65676b; --border: #dddfe2; --header-bg: #ffffff;
+            --msg-sent: #0084ff; --sent-text: #ffffff; --msg-received: #ffffff;
+            --online: #42b72a;
+        }
+        [data-theme="dark"] {
+            --bg-body: #18191a; --bg-card: #242526; --text-main: #e4e6eb;
+            --text-sub: #b0b3b8; --border: #3e4042; --header-bg: #242526;
+            --msg-received: #3e4042;
+        }
+
+        * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; box-sizing: border-box; }
+        
+        /* UI Selection Lock: Prevents blue highlight on buttons/avatars */
+        body, .view, .profile-bar, .avatar-circle, .btn-blue, .item-row { 
+            user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; 
+        }
+
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg-body); color: var(--text-main); margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+        .view { display: none; flex-direction: column; height: 100%; width: 100%; }
+        
+        .profile-bar { padding: 10px 15px; display: flex; align-items: center; gap: 12px; background: var(--header-bg); border-bottom: 1px solid var(--border); z-index: 10; }
+        .avatar-container { position: relative; flex-shrink: 0; }
+        .avatar-circle { width: 42px; height: 42px; border-radius: 50%; background: #1877f2; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; border: 1px solid var(--border); }
+        .status-dot { width: 12px; height: 12px; background: #ccc; border: 2px solid var(--header-bg); border-radius: 50%; position: absolute; bottom: 0; right: 0; }
+        .status-dot.online { background: var(--online); }
+
+        .item-row { padding: 12px 15px; display: flex; align-items: center; gap: 12px; background: var(--bg-card); border-bottom: 1px solid var(--border); cursor: pointer; }
+        .friend-meta { flex: 1; min-width: 0; }
+        .last-msg { font-size: 13px; color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 6px; background: var(--bg-body); }
+        .msg { padding: 8px 14px 18px 14px; font-size: 15px; max-width: 75%; position: relative; word-wrap: break-word; box-shadow: 0 1px 1px rgba(0,0,0,0.1); border-radius: 18px; user-select: text; -webkit-user-select: text; }
+        .sent { background: var(--msg-sent); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .received { background: var(--msg-received); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid var(--border); }
+        
+        .msg-info { position: absolute; bottom: 4px; right: 10px; display: flex; align-items: center; gap: 3px; font-size: 10px; opacity: 0.8; }
+        .received .msg-info { left: 10px; right: auto; color: var(--text-sub); }
+        .read-icon { font-size: 12px; color: rgba(255,255,255,0.7); }
+        .read-icon.seen { color: #40fbff; }
+
+        .input-area { padding: 10px 10px 30px 10px; background: var(--header-bg); display: flex; gap: 10px; border-top: 1px solid var(--border); }
+        .styled-input { width: 100%; padding: 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-body); color: var(--text-main); outline: none; font-size: 16px; }
+        .btn-blue { color: #0084ff; background: none; border: none; font-weight: bold; cursor: pointer; font-size: 16px; }
+
+        #profile-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card); padding: 20px; border-radius: 15px; box-shadow: 0 5px 30px rgba(0,0,0,0.3); z-index: 100; display: none; text-align: center; width: 85%; max-width: 320px; }
+        
+        /* Android Install Prompt */
+        #android-install-btn { display: none; background: #1877f2; color: white; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; margin: 10px auto; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-view" class="view" style="display:flex; justify-content:center; align-items:center;">
+        <div style="text-align:center; width:80%;">
+            <h1 style="color:#1877f2; font-size:48px; margin:0;">Yapper</h1>
+            <input type="email" id="email" placeholder="Email" class="styled-input" style="margin-top:20px;">
+            <input type="password" id="password" placeholder="Password" class="styled-input" style="margin-top:10px;">
+            <button id="btn-login" style="width:100%; background:#1877f2; color:white; padding:14px; border:none; border-radius:10px; font-weight:bold; margin-top:15px;">Log In</button>
+            <p id="btn-signup" style="color:#42b72a; cursor:pointer; font-weight:bold; margin-top:20px;">Create Account</p>
+        </div>
+    </div>
+
+    <div id="home-view" class="view">
+        <div class="profile-bar">
+            <div class="avatar-container"><div id="my-avatar-circle" class="avatar-circle" onclick="openModal()">?</div></div>
+            <div style="flex:1;"><div id="my-display-name" style="font-weight:bold;">Loading...</div><div id="my-status-text" style="font-size:11px; color:var(--online);">● Online</div></div>
+            <button id="btn-logout" class="btn-blue">Logout</button>
+        </div>
+        
+        <button id="android-install-btn">Install Yapper App</button>
+
+        <div style="padding:15px; display:flex; gap:8px;">
+            <input type="text" id="search-input" placeholder="Search by email..." class="styled-input" style="flex:1;">
+            <button id="btn-search" class="btn-blue">Add</button>
+        </div>
+        <div id="request-area" style="display:none; padding:10px; background:#e7f3ff; border-radius:10px; margin: 0 15px;"><small>Requests:</small><div id="request-list"></div></div>
+        <div id="friend-list" style="flex:1; overflow-y:auto;"></div>
+    </div>
+
+    <div id="chat-view" class="view">
+        <div class="profile-bar">
+            <button id="btn-back" class="btn-blue" style="font-size:24px;">←</button>
+            <div class="avatar-container">
+                <div id="chat-avatar" class="avatar-circle" style="width:36px; height:36px; font-size:18px;">?</div>
+                <div id="chat-status-dot" class="status-dot"></div>
+            </div>
+            <div style="flex:1"><strong id="chat-target-name">Chat</strong></div>
+            <button id="btn-delete" style="background:none; border:none; font-size:18px; cursor:pointer;">🗑️</button>
+        </div>
+        <div id="messages"></div>
+        <div class="input-area">
+            <input type="text" id="msg-input" placeholder="Aa" class="styled-input" autocomplete="off">
+            <button id="btn-send" class="btn-blue">➤</button>
+        </div>
+    </div>
+
+    <div id="profile-modal">
+        <h3>Settings</h3>
+        <input type="text" id="edit-nickname" class="styled-input" placeholder="Nickname" style="margin-bottom:15px;">
+        <button onclick="saveProfile()" style="width:100%; background:#0084ff; color:white; border:none; padding:12px; border-radius:10px; font-weight:bold;">Save</button>
+        <button onclick="toggleDarkMode()" style="width:100%; margin-top:10px; padding:10px; border:1px solid var(--border); border-radius:10px; background:none; color:var(--text-main);">Dark Mode</button>
+        <button onclick="closeModal()" style="margin-top:10px; background:none; border:none; color:var(--text-sub);">Close</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDocs, deleteDoc, getDoc, updateDoc, limit, writeBatch } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB98LWEjfYaG_wbkMkwo0QJ4ch8VhQO-IA",
+            authDomain: "messengerapp-dcccc.firebaseapp.com",
+            projectId: "messengerapp-dcccc",
+            storageBucket: "messengerapp-dcccc.firebasestorage.app",
+            messagingSenderId: "255835922798",
+            appId: "1:255835922798:web:d9293fc275ae2b18fa617f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let activeChatId = null, unsubscribeChat = null, deferredPrompt;
+
+        // 🟢 ANDROID INSTALL LOGIC
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('android-install-btn').style.display = 'block';
+        });
+
+        document.getElementById('android-install-btn').onclick = async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') document.getElementById('android-install-btn').style.display = 'none';
+                deferredPrompt = null;
+            }
+        };
+
+        // 🔵 STATUS & MESSAGING LOGIC
+        function setStatus(s) { if(auth.currentUser) updateDoc(doc(db,"users",auth.currentUser.uid),{status:s}); }
+        window.onfocus = () => setStatus('online');
+        window.onblur = () => setStatus('offline');
+
+        function formatTime(ts) {
+            if (!ts) return "Just now";
+            const date = ts.toDate ? ts.toDate() : new Date(ts);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                switchView('home-view');
+                const uSnap = await getDoc(doc(db, "users", user.uid));
+                if (!uSnap.exists()) await setDoc(doc(db, "users", user.uid), { email: user.email, uid: user.uid, avatar: '👤', nickname: user.email.split('@')[0], status: 'online' });
+                updateUI((await getDoc(doc(db, "users", user.uid))).data());
+                setStatus('online'); loadFriends(); loadRequests();
+            } else { switchView('auth-view'); }
+        });
+
+        function updateUI(d) {
+            document.getElementById('my-display-name').innerText = d.nickname;
+            document.getElementById('my-avatar-circle').innerText = d.avatar;
+            document.getElementById('edit-nickname').value = d.nickname;
+        }
+
+        function loadFriends() {
+            onSnapshot(collection(db, "users", auth.currentUser.uid, "friends"), (snap) => {
+                const list = document.getElementById('friend-list'); list.innerHTML = '';
+                snap.forEach(d => {
+                    const f = d.data();
+                    const roomId = [auth.currentUser.uid, f.uid].sort().join('_');
+                    onSnapshot(doc(db, "users", f.uid), (fSnap) => {
+                        const userData = fSnap.data();
+                        let row = document.getElementById(`row-${f.uid}`);
+                        if(!row) { row = document.createElement('div'); row.id = `row-${f.uid}`; row.className = 'item-row'; list.appendChild(row); }
+                        row.innerHTML = `<div class="avatar-container"><div class="avatar-circle" style="width:40px;height:40px;font-size:16px;">${userData.avatar}</div><div class="status-dot ${userData.status === 'online' ? 'online' : ''}"></div></div><div class="friend-meta"><strong>${userData.nickname}</strong><span class="last-msg" id="last-${roomId}">...</span></div>`;
+                        row.onclick = () => openChat(userData, roomId);
+                    });
+                });
+            });
+        }
+
+        function openChat(friend, roomId) {
+            activeChatId = roomId; switchView('chat-view');
+            document.getElementById('chat-target-name').innerText = friend.nickname;
+            document.getElementById('chat-avatar').innerText = friend.avatar;
+            document.getElementById('chat-status-dot').className = `status-dot ${friend.status === 'online' ? 'online' : ''}`;
+            if (unsubscribeChat) unsubscribeChat();
+            unsubscribeChat = onSnapshot(query(collection(db, "chats", roomId, "messages"), orderBy("timestamp", "asc")), (snap) => {
+                const msgDiv = document.getElementById('messages'); msgDiv.innerHTML = '';
+                snap.forEach(d => {
+                    const m = d.data();
+                    if (m.sender !== auth.currentUser.uid && !m.seen) updateDoc(doc(db, "chats", roomId, "messages", d.id), { seen: true });
+                    const div = document.createElement('div');
+                    div.className = `msg ${m.sender === auth.currentUser.uid ? 'sent' : 'received'}`;
+                    const readStatus = m.sender === auth.currentUser.uid ? `<span class="read-icon ${m.seen ? 'seen' : ''}">✔✔</span>` : '';
+                    div.innerHTML = `${m.text} <div class="msg-info"><span>${formatTime(m.timestamp)}</span>${readStatus}</div>`;
+                    msgDiv.appendChild(div);
+                });
+                msgDiv.scrollTop = msgDiv.scrollHeight;
+            });
+        }
+
+        document.getElementById('btn-send').onclick = () => {
+            const i = document.getElementById('msg-input');
+            if (i.value.trim() && activeChatId) {
+                addDoc(collection(db, "chats", activeChatId, "messages"), { text: i.value, sender: auth.currentUser.uid, timestamp: serverTimestamp(), seen: false });
+                i.value = '';
+            }
+        };
+
+        window.openModal = () => document.getElementById('profile-modal').style.display = 'block';
+        window.closeModal = () => document.getElementById('profile-modal').style.display = 'none';
+        window.saveProfile = async () => {
+            await updateDoc(doc(db, "users", auth.currentUser.uid), { nickname: document.getElementById('edit-nickname').value });
+            closeModal();
+        };
+        window.toggleDarkMode = () => {
+            const target = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.body.setAttribute('data-theme', target);
+            localStorage.setItem('yapper_theme', target);
+        };
+        if(localStorage.getItem('yapper_theme') === 'dark') document.body.setAttribute('data-theme', 'dark');
+        function switchView(id) { document.querySelectorAll('.view').forEach(v => v.style.display = 'none'); document.getElementById(id).style.display = 'flex'; }
+        document.getElementById('btn-back').onclick = () => { activeChatId = null; switchView('home-view'); };
+        document.getElementById('btn-login').onclick = () => signInWithEmailAndPassword(auth, email.value, password.value).catch(alert);
+        document.getElementById('btn-signup').onclick = () => createUserWithEmailAndPassword(auth, email.value, password.value).catch(alert);
+        document.getElementById('btn-logout').onclick = () => signOut(auth);
+        document.getElementById('btn-search').onclick = async () => {
+            const em = document.getElementById('search-input').value.toLowerCase().trim();
+            const q = query(collection(db, "users"), where("email", "==", em));
+            const snap = await getDocs(q);
+            if (snap.empty) return alert("User not found");
+            const t = snap.docs[0].data(); await setDoc(doc(db, "requests", t.uid + "_" + auth.currentUser.uid), { to: t.uid, from: auth.currentUser.uid, fromEmail: auth.currentUser.email });
+            alert("Request sent!");
+        };
+        function loadRequests() {
+            onSnapshot(query(collection(db, "requests"), where("to", "==", auth.currentUser.uid)), (snap) => {
+                const area = document.getElementById('request-area'); area.style.display = snap.empty ? 'none' : 'block';
+                const list = document.getElementById('request-list'); list.innerHTML = '';
+                snap.forEach(d => {
+                    const r = d.data(); const div = document.createElement('div'); div.style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;";
+                    div.innerHTML = `<span>${r.fromEmail}</span> <button class="btn-blue" onclick="accept('${d.id}','${r.from}','${r.fromEmail}')">Accept</button>`;
+                    list.appendChild(div);
+                });
+            });
+        }
+        window.accept = async (id, fId, fEmail) => {
+            await setDoc(doc(db, "users", auth.currentUser.uid, "friends", fId), { uid: fId, email: fEmail });
+            await setDoc(doc(db, "users", fId, "friends", auth.currentUser.uid), { uid: auth.currentUser.uid, email: auth.currentUser.email });
+            await deleteDoc(doc(db, "requests", id));
+        };
+        // Service Worker Reg
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+    </script>
+</body>
+</html>
